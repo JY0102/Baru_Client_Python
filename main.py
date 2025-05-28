@@ -5,38 +5,43 @@ import numpy as np
 import httpx
 import io
 
+from RealTime_PoseCompare import PoseAnalyzer
+
+
 app = FastAPI()
 
 # 전역 이미지 저장 변수
 latest_image = None
 
-# ** 디버깅용 화면 출력기 ** 
-import threading
-import cv2
-lock = threading.Lock()
+#region   ** 디버깅용 화면 출력기 ** 
 
-def show_window():
-    global latest_image
-    cv2.namedWindow("Live View", cv2.WINDOW_NORMAL)
+# import threading
+# import cv2
+# lock = threading.Lock()
 
-    try:
-        while True:
-            with lock:
-                img_bytes = latest_image
+# def show_window():
+#     global latest_image
+#     cv2.namedWindow("Live View", cv2.WINDOW_NORMAL)
 
-            if img_bytes is not None:
-                np_arr = np.frombuffer(img_bytes, np.uint8)
-                img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                if img is not None:
-                    cv2.imshow("Live View", img)
+#     try:
+#         while True:
+#             with lock:
+#                 img_bytes = latest_image
 
-            if cv2.waitKey(30) == 27:
-                break
-    finally:
-        cv2.destroyAllWindows()
-threading.Thread(target=show_window, daemon=True).start()
+#             if img_bytes is not None:
+#                 np_arr = np.frombuffer(img_bytes, np.uint8)
+#                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+#                 if img is not None:
+#                     cv2.imshow("Live View", img)
 
+#             if cv2.waitKey(30) == 27:
+#                 break
+#     finally:
+#         cv2.destroyAllWindows()
+# threading.Thread(target=show_window, daemon=True).start()
 
+#endregion
+# 실행 명령어
 # uvicorn main:app --reload
 
 # 포트 6천 

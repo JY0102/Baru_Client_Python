@@ -1,0 +1,122 @@
+import numpy as np
+
+# https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/index?hl=ko 에서 포즈 랜드마크 번호 이미지 참조함
+
+class PoseFSM:
+    # 운동 유형별 FSM 초기화
+    def __init__(self, exercise_type): 
+        self.exercise_type = exercise_type
+        self.state = 0
+        self.count = 0
+        self.prev_similarity = 0
+
+    # 어꺠 너비 정규화 비율 계산
+    def _calculate_ratio(self, landmarks, p1, p2): 
+        a = np.array(landmarks[p1])
+        b = np.array(landmarks[p2])
+        distance = np.linalg.norm(a - b)
+        left_shoulder = np.array(landmarks[11])
+        right_shoulder = np.array(landmarks[12])
+        shoulder_width = np.linalg.norm(left_shoulder - right_shoulder) + 1e-6
+        return distance / shoulder_width
+
+    # 더 많이 접힌 다리의 상하체 비율 반환
+    def _dominant_leg_fold_ratio(self, landmarks):
+        upper_leg_l = self._calculate_ratio(landmarks, 23, 25)
+        lower_leg_l = self._calculate_ratio(landmarks, 25, 27)
+        upper_leg_r = self._calculate_ratio(landmarks, 24, 26)
+        lower_leg_r = self._calculate_ratio(landmarks, 26, 28)
+
+        fold_ratio_l = upper_leg_l / (lower_leg_l + 1e-6)
+        fold_ratio_r = upper_leg_r / (lower_leg_r + 1e-6)
+
+        return fold_ratio_l if abs(fold_ratio_l - 1) > abs(fold_ratio_r - 1) else fold_ratio_r
+
+    # 더 많이 내려간 어깨-손목 비율 반환
+    def _dominant_arm_ratio(self, landmarks):
+        vertical_l = self._calculate_ratio(landmarks, 11, 15)
+        vertical_r = self._calculate_ratio(landmarks, 12, 16)
+        return vertical_l if vertical_l < vertical_r else vertical_r
+
+    # 현재 운동 유형에 따른 FSM 로직 호출
+    def update(self, landmarks, similarity):
+        if self.exercise_type == "pushup":
+            return self._pushup_logic(landmarks, similarity)
+        elif self.exercise_type == "squat":
+            return self._squat_logic(landmarks, similarity)
+        elif self.exercise_type == "plank":
+            return self._plank_logic(landmarks, similarity)
+        elif self.exercise_type == "lunge":
+            return self._lunge_logic(landmarks, similarity)
+        else:
+            return self.count
+
+    # pushup 로직
+    def _pushup_logic(self, landmarks, similarity):
+        vertical_ratio = self._dominant_arm_ratio(landmarks)
+
+        if self.state == 0:
+            if vertical_ratio < 0.6 and similarity > 70:
+                self.state = 1
+        elif self.state == 1:
+            if vertical_ratio > 0.8 and similarity > 70:
+                self.state = 0
+                self.count += 1
+
+        return self.count
+
+    # squat 로직
+    def _squat_logic(self, landmarks, similarity):
+        leg_fold_ratio = self._dominant_leg_fold_ratio(landmarks)
+
+        if self.state == 0:
+            if leg_fold_ratio < 0.8 and similarity > 70:
+                self.state = 1
+        elif self.state == 1:
+            if leg_fold_ratio > 1.2 and similarity > 70:
+                self.state = 0
+                self.count += 1
+
+        return self.count
+
+    # plank 로직
+    def _plank_logic(self, landmarks, similarity):
+        left_ok = self._calculate_ratio(landmarks, 11, 23) < 1.2 and \
+                  self._calculate_ratio(landmarks, 23, 25) < 1.2 and \
+                  self._calculate_ratio(landmarks, 25, 27) < 1.2
+
+        right_ok = self._calculate_ratio(landmarks, 12, 24) < 1.2 and \
+                   self._calculate_ratio(landmarks, 24, 26) < 1.2 and \
+                   self._calculate_ratio(landmarks, 26, 28) < 1.2
+
+        if left_ok or right_ok:
+            self.state = 1  # 유지 중
+        else:
+            self.state = 0  # 벗어남
+
+        return self.count
+
+    # lunge 로직
+    def _lunge_logic(self, landmarks, similarity):
+        left_fold = self._calculate_ratio(landmarks, 23, 25)  # 왼쪽 골반-무릎
+        right_fold = self._calculate_ratio(landmarks, 24, 26)  # 오른쪽 골반-무릎
+
+        # 더 접힌 쪽이 현재 동작 중인 다리
+        threshold_down = 0.5
+        threshold_up = 0.8
+
+        if self.state == 0:
+            if left_fold < threshold_down and similarity > 70:
+                self.state = 1  # 왼쪽 런지 내려감
+        elif self.state == 1:
+            if left_fold > threshold_up and similarity > 70:
+                self.state = 2  # 왼쪽 런지 올라옴
+        elif self.state == 2:
+            if right_fold < threshold_down and similarity > 70:
+                self.state = 3  # 오른쪽 런지 내려감
+        elif self.state == 3:
+            if right_fold > threshold_up and similarity > 70:
+                self.state = 0  # 오른쪽 런지 올라옴 → 1회 완료
+                self.count += 1
+
+        return self.count

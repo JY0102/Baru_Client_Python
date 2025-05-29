@@ -67,7 +67,7 @@ Accuracies = []
 # 정확도 비교하는 클래스
 Compare = None
 
-
+# 정확도 비교후 저장
 def process_frame_in_thread(image):
     global Compare
     result = Compare.process_frame(latest_image)
@@ -78,7 +78,7 @@ def process_frame_in_thread(image):
         return
 
 # 운동 종류 -> DB -> npy 파일
-@app.post("/type/")
+@app.post("/start/")
 async def GetNpy(exercise : str):
     global CurrentNpy
     global CurrentExercise
@@ -89,12 +89,12 @@ async def GetNpy(exercise : str):
         try:            
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"{BASE_URL}/get/type/?exercise={exercise}")
-            
+
             if response.status_code == 200:
                 bytes_io = io.BytesIO(response.content)
-                CurrentNpy = np.load(bytes_io)
+                # CurrentNpy = np.load(bytes_io)
                 CurrentExercise = exercise                
-                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy_path= CurrentNpy)                
+                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy= bytes_io)       
             else:
                 raise HTTPException(status_code=401 , detail="GetNpy Error")
             
@@ -102,6 +102,7 @@ async def GetNpy(exercise : str):
             raise
         except httpx.RequestError as e:
             raise HTTPException(status_code=500, detail=f"Request failed: {str(e)}")
+        
 
 # !! 백그라운드 스레드에서 운동 비교하는 함수 제작 예정 !!
 # 운동시작

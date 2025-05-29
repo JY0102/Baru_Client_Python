@@ -10,15 +10,17 @@ class PoseAnalyzer:
     # 운동 이름 , npy 확장파일
     # 각종 초기화
     
-    def __init__(self, exercise_type, reference_npy_path):
+    def __init__(self, exercise_type, reference_npy):
         # MediaPipe 초기화
         self.pose = mp.solutions.pose.Pose(static_image_mode=False)
 
-        self.exercise_type = "" # 전달 받은 동작 넣기
+        # self.exercise_type = "" # 전달 받은 동작 넣기
         self.fsm = PoseFSM(exercise_type) # FSM 초기화
 
         # 기준 동작 시퀀스 로드
-        self.reference_pose_sequence = np.load(f"{exercise_type}_reference.npy")  # 예: squat_reference.npy 
+        # self.reference_pose_sequence = np.load(f"{exercise_type}_reference.npy")  # 예: squat_reference.npy 
+        print(reference_npy)
+        self.reference_pose_sequence = np.load(reference_npy ,allow_pickle=True)
 
         # 실시간 사용자 포즈 시퀀스 저장
         self.live_pose_sequence = []
@@ -31,7 +33,7 @@ class PoseAnalyzer:
         if pose_vec_flat is not None and landmarks is not None:
             with self.lock:
                 self.live_pose_sequence.append(pose_vec_flat) # 프레임 누적시키기
-                if len(self.live_pose_sequence) >= 30: # 30프레임당 1초 ( 추후 수정 )
+                if len(self.live_pose_sequence) >= 120: # 30프레임당 1초 ( 추후 수정 )
                     similarity = self.compare_with_dtw(np.array(self.live_pose_sequence)) # 정확도 계산 함수 호출
                     count = self.fsm.update(landmarks, similarity) # FSM 업데이트로 카운트 확인
                     self.live_pose_sequence.clear() # 다음 분석을 위해서 초기화

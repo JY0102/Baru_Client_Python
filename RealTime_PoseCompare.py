@@ -28,13 +28,13 @@ class PoseAnalyzer:
 
     # 실시간 프레임 분석 함수 (JPEG 바이트 입력 → 정확도 및 카운트 반환)
     def process_frame(self, jpeg_bytes):
-        frame = self.decode_jpeg_bytes(jpeg_bytes) # JPEG 바이트 -> 이미지 변환 함수 호출
-        pose_vec_flat, landmarks = self.extract_pose_vector(frame) # 포즈 벡터 및 랜드마크 추출 함수 호출
+        frame = self._decode_jpeg_bytes(jpeg_bytes) # JPEG 바이트 -> 이미지 변환 함수 호출
+        pose_vec_flat, landmarks = self._extract_pose_vector(frame) # 포즈 벡터 및 랜드마크 추출 함수 호출
         if pose_vec_flat is not None and landmarks is not None:
             with self.lock:
-                self.live_pose_sequence.append(pose_vec_flat) # 프레임 누적시키기
-                if len(self.live_pose_sequence) >= 120: # 30프레임당 1초 ( 추후 수정 )
-                    similarity = self.compare_with_dtw(np.array(self.live_pose_sequence)) # 정확도 계산 함수 호출
+                self.live_pose_sequence.append(np.array(pose_vec_flat).flatten()) # 프레임 누적시키기
+                if len(self.live_pose_sequence) >= 60: # 30프레임당 1초 ( 추후 수정 )
+                    similarity = self._compare_with_dtw(self.live_pose_sequence)
                     count = self.fsm.update(landmarks, similarity) # FSM 업데이트로 카운트 확인
                     self.live_pose_sequence.clear() # 다음 분석을 위해서 초기화
                     

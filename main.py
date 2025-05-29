@@ -3,11 +3,13 @@
 #region 참조 모음
 
 # fastAPI 에 필요
-from fastapi import FastAPI, HTTPException , Request
+from fastapi import FastAPI, HTTPException , Request 
 import httpx
 import io
 # mediapipe pose 확장파일
 import numpy as np
+
+from pydantic import BaseModel
 
 # 백그라운드 스레드 활성화에 필요함
 import asyncio
@@ -55,7 +57,8 @@ latest_image = None
 
 # 포트 6천 
 # 서버 주소
-BASE_URL = "http://127.0.0.1:6000"
+# BASE_URL = "http://127.0.0.1:6000"
+BASE_URL = "http://192.168.0.76:80"
 
 # 현재 운동하고있는 종류
 CurrentExercise = None
@@ -70,31 +73,45 @@ Compare = None
 # 정확도 비교후 저장
 def process_frame_in_thread(image):
     global Compare
+    
+    if not Compare:
+        print('없')
+        
     result = Compare.process_frame(latest_image)
+    print(result)
+    
     
     if result:
         Accuracies.append(result)
+        
+        print(Accuracies)
     else:
         return
 
+class ExerciseRequest(BaseModel):
+    exercise: str
+    
 # 운동 종류 -> DB -> npy 파일
 @app.post("/start/")
-async def GetNpy(exercise : str):
+async def GetNpy(req: ExerciseRequest):
     global CurrentNpy
     global CurrentExercise
     global Compare
+    
+    exercise = req.exercise
+    print(exercise)
     
     if CurrentExercise != exercise and exercise:
         
         try:            
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"{BASE_URL}/get/type/?exercise={exercise}")
-
             if response.status_code == 200:
                 bytes_io = io.BytesIO(response.content)
                 # CurrentNpy = np.load(bytes_io)
                 CurrentExercise = exercise                
-                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy= bytes_io)       
+                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy= bytes_io) 
+                print('저장완')      
             else:
                 raise HTTPException(status_code=401 , detail="GetNpy Error")
             
@@ -108,7 +125,7 @@ async def GetNpy(exercise : str):
 # 운동시작
 @app.post("/byte/")
 async def Post_Check(request: Request):           
-
+    
     # jpeg Byte
     # type = bytes
     global latest_image
@@ -118,9 +135,6 @@ async def Post_Check(request: Request):
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, process_frame_in_thread, latest_image)
     
-
-        
-
 
 # 정확도 값 반환 및 DB 저장
 @app.get("/get/accuracy")
@@ -133,5 +147,10 @@ async def Get_Accuracy(id : str):
     async with httpx.AsyncClient() as client:
         await client.post(f"{BASE_URL}/user/beforeinfo/", json={    "id" : id , "Accuracies": reuslt})                
     
+    print(reuslt)
     return reuslt
 
+
+@app.get("/test/")
+async def Get_Test():
+    return Accuracies

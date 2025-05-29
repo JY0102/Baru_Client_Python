@@ -76,6 +76,7 @@ def process_frame_in_thread(image):
     
     if not Compare:
         print('없')
+        return
         
     result = Compare.process_frame(latest_image)
     print(result)
@@ -131,9 +132,26 @@ async def Post_Check(request: Request):
     global latest_image
     latest_image  = await request.body()
 
-    executor = ThreadPoolExecutor(max_workers=20)
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(executor, process_frame_in_thread, latest_image)
+    # executor = ThreadPoolExecutor(max_workers=20)
+    # loop = asyncio.get_event_loop()
+    # loop.run_in_executor(executor, process_frame_in_thread, latest_image)
+    
+    global Compare
+    
+    if not Compare:
+        print('없')
+        return        
+        
+    result = Compare.process_frame(latest_image)
+    print(result)
+    
+    
+    if result:
+        Accuracies.append(result)
+        
+        print(Accuracies)
+    else:
+        return
     
 
 # 정확도 값 반환 및 DB 저장

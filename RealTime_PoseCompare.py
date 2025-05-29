@@ -20,7 +20,10 @@ class PoseAnalyzer:
         # 기준 동작 시퀀스 로드
         # self.reference_pose_sequence = np.load(f"{exercise_type}_reference.npy")  # 예: squat_reference.npy 
         print(reference_npy)
-        self.reference_pose_sequence = np.load(reference_npy ,allow_pickle=True)
+        # self.reference_pose_sequence = np.load(reference_npy ,allow_pickle=True)
+        raw_seq = np.load(reference_npy, allow_pickle=True)  # (T, 33, 3) 라면
+        self.reference_pose_sequence = [frame.flatten() for frame in raw_seq]
+
 
         # 실시간 사용자 포즈 시퀀스 저장
         self.live_pose_sequence = []
@@ -32,7 +35,8 @@ class PoseAnalyzer:
         pose_vec_flat, landmarks = self._extract_pose_vector(frame) # 포즈 벡터 및 랜드마크 추출 함수 호출
         if pose_vec_flat is not None and landmarks is not None:
             with self.lock:
-                self.live_pose_sequence.append(np.array(pose_vec_flat).flatten()) # 프레임 누적시키기
+                # self.live_pose_sequence.append(np.array(pose_vec_flat).flatten()) # 프레임 누적시키기
+                self.live_pose_sequence.append(pose_vec_flat)
                 if len(self.live_pose_sequence) >= 60: # 30프레임당 1초 ( 추후 수정 )
                     similarity = self._compare_with_dtw(self.live_pose_sequence)
                     count = self.fsm.update(landmarks, similarity) # FSM 업데이트로 카운트 확인

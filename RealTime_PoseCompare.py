@@ -35,10 +35,9 @@ class PoseAnalyzer:
                     similarity = self.compare_with_dtw(np.array(self.live_pose_sequence)) # 정확도 계산 함수 호출
                     count = self.fsm.update(landmarks, similarity) # FSM 업데이트로 카운트 확인
                     self.live_pose_sequence.clear() # 다음 분석을 위해서 초기화
-                    return { # 딕셔너리로 반환
-                        "카운트": count, # 누적 카운트
-                        "정확도": round(similarity, 2) # 정확도
-                    }
+                    
+                    return round(similarity, 1) # 정확도                        
+                    
         return None # 유효하지 않은 프레임은 None 반환
 
     #region 각종 유틸함수

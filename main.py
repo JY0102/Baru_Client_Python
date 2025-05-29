@@ -1,12 +1,20 @@
 # Client 에 붙은 Python
 
+#region 참조 모음
+
+# fastAPI 에 필요
 from fastapi import FastAPI, HTTPException , Request
-import numpy as np
 import httpx
 import io
+# mediapipe pose 확장파일
+import numpy as np
+
+# 백그라운드 스레드 활성화에 필요함
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from RealTime_PoseCompare import PoseAnalyzer
-
+#endregion
 
 app = FastAPI()
 
@@ -41,6 +49,7 @@ latest_image = None
 # threading.Thread(target=show_window, daemon=True).start()
 
 #endregion
+
 # 실행 명령어
 # uvicorn main:app --reload
 
@@ -55,11 +64,25 @@ CurrentNpy = None
 # 정확도 값
 Accuracies = []
 
+# 정확도 비교하는 클래스
+Compare = None
+
+
+def process_frame_in_thread(image):
+    global Compare
+    result = Compare.process_frame(latest_image)
+    
+    if result:
+        Accuracies.append(result)
+    else:
+        return
+
 # 운동 종류 -> DB -> npy 파일
 @app.post("/type/")
 async def GetNpy(exercise : str):
     global CurrentNpy
     global CurrentExercise
+    global Compare
     
     if CurrentExercise != exercise and exercise:
         
@@ -71,6 +94,7 @@ async def GetNpy(exercise : str):
                 bytes_io = io.BytesIO(response.content)
                 CurrentNpy = np.load(bytes_io)
                 CurrentExercise = exercise                
+                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy_path= CurrentNpy)                
             else:
                 raise HTTPException(status_code=401 , detail="GetNpy Error")
             
@@ -89,8 +113,12 @@ async def Post_Check(request: Request):
     global latest_image
     latest_image  = await request.body()
 
-    # 반환값 저장
-    # Accuracies.append()
+    executor = ThreadPoolExecutor(max_workers=20)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, process_frame_in_thread, latest_image)
+    
+
+        
 
 
 # 정확도 값 반환 및 DB 저장

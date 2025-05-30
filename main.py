@@ -133,8 +133,8 @@ async def Post_Check(request: Request):
     # loop = asyncio.get_event_loop()
     # loop.run_in_executor(executor, process_frame_in_thread, latest_image)
     
-# 목표량 전송
-@app.post("/post/goal")
+# 목표량 저장
+@app.post("/goal")
 async def Post_Goal(request : Request):
     
     body = await request.body()
@@ -170,6 +170,3 @@ async def Get_Accuracy(baru_id : str):
     return result
 
 
-@app.get("/test/")
-async def Get_Test():
-    return Accuracies

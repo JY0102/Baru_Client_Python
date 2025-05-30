@@ -5,8 +5,13 @@ from fastapi import FastAPI, HTTPException , Request
 import httpx
 import io
 import json
-
+# 서버에서 npy 로드
+import numpy as np
 from pydantic import BaseModel
+
+import os
+import certifi
+os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # 백그라운드 스레드 활성화에 필요함
 import asyncio
@@ -58,7 +63,7 @@ latest_image = None
 # 포트 6천 
 # 서버 주소
 # BASE_URL = "http://127.0.0.1:6000"
-BASE_URL = "http://192.168.0.76:80"
+BASE_URL = "http://192.168.0.106:80"
 
 # 현재 운동하고있는 종류
 CurrentExercise = None
@@ -79,13 +84,12 @@ def process_frame_in_thread(image):
     result = Compare.process_frame(latest_image)
     print(result)
     
-    
     if result:
         Accuracies.append(result['정확도'])
         Count = result['카운트']
     else:
-        return
-
+        return 
+    
 class ExerciseRequest(BaseModel):
     exercise: str
     
@@ -105,19 +109,20 @@ async def GetNpy(req: ExerciseRequest):
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"{BASE_URL}/get/type/?exercise={exercise}")
             if response.status_code == 200:
-                bytes_io = io.BytesIO(response.content)
-                # CurrentNpy = np.load(bytes_io)
-                CurrentExercise = exercise                
-                Compare = PoseAnalyzer(exercise_type= CurrentExercise , reference_npy= bytes_io) 
-                print('저장완')      
+                try:
+                    bytes_io = io.BytesIO(response.content)
+                    CurrentNpy = np.load(bytes_io, allow_pickle=True)
+                    CurrentExercise = exercise                
+                    Compare = PoseAnalyzer(exercise_type=CurrentExercise , reference_npy=CurrentNpy) 
+                    print('Compare 생성 성공')  
+                except Exception as e:
+                    print("기준 NPY 로딩 실패:", str(e))   
             else:
                 raise HTTPException(status_code=401 , detail="GetNpy Error")
-            
         except HTTPException:
             raise
         except httpx.RequestError as e:
             raise HTTPException(status_code=500, detail=f"Request failed: {str(e)}")
-        
 
 # !! 백그라운드 스레드에서 운동 비교하는 함수 제작 예정 !!
 # 운동시작
@@ -129,9 +134,9 @@ async def Post_Check(request: Request):
     global latest_image
     latest_image  = await request.body()
 
-    # executor = ThreadPoolExecutor(max_workers=20)
-    # loop = asyncio.get_event_loop()
-    # loop.run_in_executor(executor, process_frame_in_thread, latest_image)
+    executor = ThreadPoolExecutor(max_workers=20)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, process_frame_in_thread, latest_image)
     
 # 목표량 저장
 @app.post("/goal")

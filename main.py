@@ -1,13 +1,10 @@
-# Client 에 붙은 Python
-
 #region 참조 모음
 
 # fastAPI 에 필요
 from fastapi import FastAPI, HTTPException , Request 
 import httpx
 import io
-# mediapipe pose 확장파일
-import numpy as np
+import json
 
 from pydantic import BaseModel
 
@@ -15,7 +12,10 @@ from pydantic import BaseModel
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+# 정확도 체크
 from RealTime_PoseCompare import PoseAnalyzer
+# 현재 시간
+from datetime import datetime
 #endregion
 
 app = FastAPI()
@@ -66,6 +66,8 @@ CurrentNpy = None
 
 # 정확도 값
 Accuracies = []
+# 총 개수
+Count  = None
 
 # 정확도 비교하는 클래스
 Compare = None
@@ -73,19 +75,14 @@ Compare = None
 # 정확도 비교후 저장
 def process_frame_in_thread(image):
     global Compare
-    
-    if not Compare:
-        print('없')
-        return
-        
+    global Count
     result = Compare.process_frame(latest_image)
     print(result)
     
     
     if result:
-        Accuracies.append(result)
-        
-        print(Accuracies)
+        Accuracies.append(result['정확도'])
+        Count = result['카운트']
     else:
         return
 
@@ -136,37 +133,41 @@ async def Post_Check(request: Request):
     # loop = asyncio.get_event_loop()
     # loop.run_in_executor(executor, process_frame_in_thread, latest_image)
     
-    global Compare
+# 목표량 전송
+@app.post("/post/goal")
+async def Post_Goal(request : Request):
     
-    if not Compare:
-        print('없')
-        return        
-        
-    result = Compare.process_frame(latest_image)
-    print(result)
+    body = await request.body()
     
-    
-    if result:
-        Accuracies.append(result)
-        
-        print(Accuracies)
-    else:
-        return
+    async with httpx.AsyncClient() as client:
+        await client.post(f"{BASE_URL}/data/insert/beforeinfo", json=json.loads(body))         
     
 
 # 정확도 값 반환 및 DB 저장
 @app.get("/get/accuracy")
-async def Get_Accuracy(id : str):      
-    global Accuracies
-    reuslt = Accuracies.copy()
-    Accuracies.clear()    
+async def Get_Accuracy(baru_id : str):      
     
+    global Accuracies    
+    global Count
+    
+    result = (Count , Accuracies.copy() ) 
+        
     # DB 저장
     async with httpx.AsyncClient() as client:
-        await client.post(f"{BASE_URL}/user/beforeinfo/", json={    "id" : id , "Accuracies": reuslt})                
+        json_str ={
+            "baru_id" : baru_id , 
+            "date" : datetime.now().strftime("%Y-%m-%d"),
+            "name" : CurrentExercise ,
+            "count" : Count ,
+            "accuracies": Accuracies
+            }
+        # post 요청하고 따로 기다리지는 않음
+        _= client.post(f"{BASE_URL}/data/insert/play/", json=json_str)                
     
-    print(reuslt)
-    return reuslt
+    Count = None
+    Accuracies.clear()    
+    # C#에 전송
+    return result
 
 
 @app.get("/test/")

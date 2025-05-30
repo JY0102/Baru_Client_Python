@@ -42,7 +42,10 @@ class PoseAnalyzer:
                     count = self.fsm.update(landmarks, similarity) # FSM 업데이트로 카운트 확인
                     self.live_pose_sequence.clear() # 다음 분석을 위해서 초기화
                     
-                    return round(similarity, 1) # 정확도                        
+                    return { # 딕셔너리로 반환
+                        "정확도": round(similarity, 2), # 정확도
+                        "카운트": count # 누적 카운트
+                    }
                     
         return None # 유효하지 않은 프레임은 None 반환
 
@@ -68,3 +71,4 @@ class PoseAnalyzer:
         return similarity * 100
 
     #endregion
+    

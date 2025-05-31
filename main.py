@@ -21,10 +21,15 @@ from concurrent.futures import ThreadPoolExecutor
 from RealTime_PoseCompare import PoseAnalyzer
 # 현재 시간
 from datetime import datetime
+
+
 #endregion
 
 app = FastAPI()
 
+
+
+    
 # 전역 이미지 저장 변수
 latest_image = None
 
@@ -59,11 +64,12 @@ latest_image = None
 
 # 실행 명령어
 # uvicorn main:app --reload
+# uvicorn main:app --host 220.90.180.114 --port 8080 --reload
 
 # 포트 6천 
 # 서버 주소
 # BASE_URL = "http://127.0.0.1:6000"
-BASE_URL = "http://192.168.0.106:80"
+BASE_URL = "http://220.90.180.114:8000"
 
 # 현재 운동하고있는 종류
 CurrentExercise = None
@@ -74,33 +80,40 @@ Accuracies = []
 # 총 개수
 Count  = None
 
+
 # 정확도 비교하는 클래스
 Compare = None
 
 # 정확도 비교후 저장
-def process_frame_in_thread(image):
+def process_frame_in_thread(image , uid):
     global Compare
     global Count
+    
     result = Compare.process_frame(latest_image)
     print(result)
     
     if result:
         Accuracies.append(result['정확도'])
         Count = result['카운트']
+        
+        data = {
+        "Count": Count,
+        "Accuracies": Accuracies.copy()
+        }
+            
+        
+        app.state.redis.set(f"result:{uid}", json.dumps(data), ex=10)
     else:
         return 
     
-class ExerciseRequest(BaseModel):
-    exercise: str
-    
+
 # 운동 종류 -> DB -> npy 파일
 @app.post("/start/")
-async def GetNpy(req: ExerciseRequest):
+async def GetNpy(exercise : str):
     global CurrentNpy
     global CurrentExercise
     global Compare
-    
-    exercise = req.exercise
+        
     print(exercise)
     
     if CurrentExercise != exercise and exercise:
@@ -115,6 +128,11 @@ async def GetNpy(req: ExerciseRequest):
                     CurrentExercise = exercise                
                     Compare = PoseAnalyzer(exercise_type=CurrentExercise , reference_npy=CurrentNpy) 
                     print('Compare 생성 성공')  
+                    
+                    import uuid
+                    uid = str(uuid.uuid4())  # 고유 id 생성
+    
+                    return {"uid": uid}
                 except Exception as e:
                     print("기준 NPY 로딩 실패:", str(e))   
             else:
@@ -139,18 +157,29 @@ async def Post_Check(request: Request):
     loop.run_in_executor(executor, process_frame_in_thread, latest_image)
     
 # 목표량 저장
-@app.post("/goal")
+@app.post("/goal/")
 async def Post_Goal(request : Request):
     
     body = await request.body()
     
     async with httpx.AsyncClient() as client:
         await client.post(f"{BASE_URL}/data/insert/beforeinfo", json=json.loads(body))         
+
+# 실시간 정확도 , 개수 출력
+@app.get("/get/current/")
+async def Get_Accuracy(uid : str):
+    key = f"result:{uid}"
+    data = await app.state.redis.get(key)
     
+    if data:
+        await app.state.redis.delete(key)
+        return json.loads(data)
+    else :
+        raise HTTPException(status_code=400)
 
 # 정확도 값 반환 및 DB 저장
-@app.get("/get/accuracy")
-async def Get_Accuracy(baru_id : str):      
+@app.get("/get/accuracy/")
+async def Get_Accuracy(id : str):      
     
     global Accuracies    
     global Count
@@ -160,7 +189,7 @@ async def Get_Accuracy(baru_id : str):
     # DB 저장
     async with httpx.AsyncClient() as client:
         json_str ={
-            "baru_id" : baru_id , 
+            "baru_id" : id , 
             "date" : datetime.now().strftime("%Y-%m-%d"),
             "name" : CurrentExercise ,
             "count" : Count ,

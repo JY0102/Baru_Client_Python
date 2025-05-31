@@ -53,7 +53,7 @@ class PoseAnalyzer:
                     print(f"Count: {count}")
                     self.live_pose_sequence.clear() # 다음 분석을 위해서 초기화   
                     print(round(similarity, 1))
-                    return {"정확도":round(similarity, 1), "카운트":count} # 정확도                        
+                    return {"정확도":round(similarity, 1), "카운트":count} # 정확도 
         else:
             print("포즈 인식 실패")           
         return None
